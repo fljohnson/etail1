@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:http/http.dart' as http;
 import 'shopclasses.dart';
 
@@ -88,7 +89,7 @@ Map<String,String> hdrs = {
   */
 }
 
-void addToCart(String realId) {
+void addToCartMain(String realId) {
   int qty = 1;
   if(cartItems.containsKey(realId))
     {
@@ -108,9 +109,15 @@ class MyApp extends StatelessWidget {
   MyApp({Key key,this.categories}) : super(key:key);
   @override
   Widget build(BuildContext context) {
-    var labarre = AppBar(
-      title: Text('Fetch Data Example'),
-    );
+    if(isIOS())
+    {
+     return CupertinoApp(
+        theme:CupertinoThemeData(
+          primaryColor: Colors.blue
+        ),
+       home:AppShell(title: 'Natural Conduit',categories: this.categories),
+     );
+    }
 
     return MaterialApp(
       title: 'Flutter Demo',
@@ -126,7 +133,7 @@ class MyApp extends StatelessWidget {
         // is not restarted.
         primarySwatch: Colors.blue,
       ),
-      home: AppShell(title: 'Flutter Demo Home Page',categories: this.categories),
+      home: AppShell(title: 'Natural Conduit',categories: this.categories),
 
     );
 
@@ -197,7 +204,101 @@ class _AppShellState extends State<AppShell> {
        future:widget.categories,
          builder: (context, snapshot) {
            if (snapshot.hasData) {
+             if(isIOS()) {
+               List<Widget> categoryActions = [];
+               for(int i=0;i<snapshot.data.length;i++)
+               {
+                 categoryActions.add(
+                     CupertinoActionSheetAction(
+                     onPressed:() {
+                          Navigator.pop(context,snapshot.data[i].realId);
+                     },
+                     child:Text(snapshot.data[i].name)
+                 )
+                 );
+               }
 
+               List<Widget> central = [
+                 FutureBuilder<List<CatalogItem>>(
+                 future:availableItems,
+                 builder: (context,snapshot) {
+                   if (!didSearch) {
+                     return Text("Please select from the categories",);
+                   }
+                   if (snapshot.hasData) {
+                     List<Widget> rv = [];
+                     for (int j = 0; j < snapshot.data.length; j++) {
+                       if (j > 0) {
+                         rv.add(Divider());
+                       }
+                       rv.add(ItemDisplay(snapshot.data[j], MediaQuery
+                           .of(context)
+                           .size
+                           .width, this));
+                     }
+                     return ListView(children: rv);
+                   }
+                   if (snapshot.hasError) {
+                     return Text("${snapshot.error}");
+                   }
+                   //must be still going, so..
+                   return CircularProgressIndicator();
+           }
+                 )
+               ]
+               ;
+               /*
+               if(didSearch)
+                 {
+                   central.add(
+
+                       CupertinoActionSheet(
+                           title:Text("Choose category"),
+                           cancelButton: CupertinoActionSheetAction(
+                             onPressed: () {},
+                             child:Text("Cancel"),
+                           ),
+                           actions:categoryActions
+                       )
+                   );
+                 }
+               */
+               return CupertinoPageScaffold(
+                   navigationBar:CupertinoNavigationBar(
+                     leading:CartButton(),
+                     middle:Text(widget.title),
+                     trailing:CupertinoButton(
+                       onPressed:(){
+                         showCategoryMenu(context,CupertinoActionSheet(
+                             title:Text("Choose a category"),
+                           actions: categoryActions,
+                           cancelButton: CupertinoActionSheetAction(
+                            child: const Text('Cancel'),
+                             isDefaultAction: true,
+                             onPressed: () {
+                                 Navigator.pop(context, null);
+                             }
+                         )
+                         )
+                         );
+                       },
+                       child:Text("Shop"),
+
+                     ),
+
+                   ),
+                    child: Center(
+                   // Center is a layout widget. It takes a single child and positions it
+                   // in the middle of the parent.
+                   //child: Text("Choose from the menu of categories")
+                     child:central[0]
+
+                 )
+
+
+               );
+             }
+             /*done only if not iOS*/
              return Scaffold(
                  appBar: AppBar(
                    // Here we take the value from the MyHomePage object that was created by
@@ -261,6 +362,21 @@ class _AppShellState extends State<AppShell> {
                  )
              );
            } else if (snapshot.hasError) {
+             if(isIOS())
+             {
+               return CupertinoPageScaffold(
+                 navigationBar:CupertinoNavigationBar(
+                     leading:CartButton(),
+                     middle:Text(widget.title)
+                 ),
+                 child:Center(
+                   // Center is a layout widget. It takes a single child and positions it
+                   // in the middle of the parent.
+                     child: Text("${snapshot.error}")
+                 )
+               );
+             }
+             /*done only if not iOS*/
              return Scaffold(
                  appBar: AppBar(
                    // Here we take the value from the MyHomePage object that was created by
@@ -280,6 +396,20 @@ class _AppShellState extends State<AppShell> {
 
            // By default, show a loading spinner
 
+           if(isIOS()){
+             return CupertinoPageScaffold(
+                 navigationBar:CupertinoNavigationBar(
+                     leading:CartButton(),
+                     middle:Text(widget.title)
+                 ),
+                 child:Center(
+                   // Center is a layout widget. It takes a single child and positions it
+                   // in the middle of the parent.
+                     child: CircularProgressIndicator()
+                 )
+             );
+           }
+           /*done only if not iOS*/
            return Scaffold(
                appBar: AppBar(
                  // Here we take the value from the MyHomePage object that was created by
@@ -301,7 +431,21 @@ class _AppShellState extends State<AppShell> {
 
   void addToCart(String realId) {
     setState((){
-      addToCart(realId);
+      addToCartMain(realId);
+    });
+  }
+
+  void showCategoryMenu(BuildContext context, Widget child) {
+    showCupertinoModalPopup<String>(
+      context: context,
+      builder:(BuildContext context) => child
+    ).then((String value) {
+      if(value != null) {
+        setState((){
+          didSearch = true;
+          widget.fetchItemsInCategory(value);
+        });
+      }
     });
   }
 
@@ -314,6 +458,12 @@ class CartButton extends StatelessWidget {
     cartItems.forEach((key,value){
       numItems += value;
     });
+    if(isIOS()){
+      return CupertinoButton(
+        onPressed: (){},
+        child:Row(children:[Icon(CupertinoIcons.shopping_cart),Text("$numItems")])
+      );
+    }
     return MaterialButton(
       onPressed: (){},
       child: Row(children:[Icon(Icons.shopping_cart),Text("$numItems")]),

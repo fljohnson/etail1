@@ -1,3 +1,5 @@
+import 'dart:io';
+
 class Category {
 
   final int id;
@@ -82,4 +84,9 @@ class CatalogItem {
 
     return rv;
   }
+}
+
+
+bool isIOS() {
+  return Platform.isIOS;
 }
